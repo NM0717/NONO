@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的点靶挑战</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f5fb; color: #172445; font: 1rem/1.55 "Microsoft YaHei", system-ui, sans-serif; }
+  main { width: min(600px, calc(100% - 32px)); margin: 48px auto; }
+  h1 { margin: 0; font-size: 2.2rem; }
+  p { margin: 8px 0 18px; }
+  .scoreboard { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+  button { font: inherit; cursor: pointer; }
+  #start { border: 0; border-radius: 8px; padding: 8px 16px; background: #2d489f; color: white; }
+  #start:disabled { background: #ebeef5; color: #404c66; cursor: default; }
+  button:focus-visible { outline: 3px solid #27377a; outline-offset: 3px; }
+  #field { position: relative; height: min(50vh, 360px); min-height: 180px; border: 1px solid #aebcda; border-radius: 12px; background: white; }
+  #target { position: absolute; width: 48px; height: 48px; border: 8px solid #993a17; border-radius: 50%; background: #ffe0a8; touch-action: manipulation; }
+  #message { min-height: 1.6em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>15 秒点靶</h1>
+  <p>倒计时结束前尽量多点中圆靶。每点中一次，圆靶就会换个位置。</p>
+  <div class="scoreboard">
+    <button id="start">开始游戏</button>
+    <span>剩余 <b id="time">15</b> 秒</span>
+    <span>得分 <b id="score">0</b></span>
+  </div>
+  <div id="field" aria-label="游戏区域">
+    <button id="target" aria-label="击中圆靶" hidden></button>
+  </div>
+  <p id="message" role="status">点击「开始游戏」准备点靶。</p>
+</main>
+<script>
+  const GAME_SECONDS = 15;
+  const start = document.querySelector('#start');
+  const field = document.querySelector('#field');
+  const target = document.querySelector('#target');
+  const time = document.querySelector('#time');
+  const scoreLabel = document.querySelector('#score');
+  const message = document.querySelector('#message');
+  let score = 0;
+  let deadline = 0;
+  let timer;
+
+  function moveTarget() {
+    const maxX = field.clientWidth - target.offsetWidth;
+    const maxY = field.clientHeight - target.offsetHeight;
+    target.style.left = Math.floor(Math.random() * Math.max(0, maxX + 1)) + 'px';
+    target.style.top = Math.floor(Math.random() * Math.max(0, maxY + 1)) + 'px';
+  }
+
+  function updateClock() {
+    const remaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+    time.textContent = remaining;
+    if (remaining > 0) return;
+    clearInterval(timer);
+    target.hidden = true;
+    start.disabled = false;
+    start.textContent = '再玩一次';
+    message.textContent = '时间到！本局得分 ' + score + '。';
+    start.focus();
+  }
+
+  start.addEventListener('click', () => {
+    score = 0;
+    scoreLabel.textContent = score;
+    start.disabled = true;
+    target.hidden = false;
+    deadline = performance.now() + GAME_SECONDS * 1000;
+    message.textContent = '游戏开始！';
+    moveTarget();
+    target.focus();
+    updateClock();
+    timer = setInterval(updateClock, 50);
+  });
+
+  target.addEventListener('click', () => {
+    if (performance.now() >= deadline) {
+      updateClock();
+      return;
+    }
+    scoreLabel.textContent = ++score;
+    moveTarget();
+  });
+
+  window.addEventListener('resize', () => {
+    if (!target.hidden) moveTarget();
+  });
+</script>
+</body>
+</html>
