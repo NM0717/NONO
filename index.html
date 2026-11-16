@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>储能需量收益测算</title>
+<style>
+  :root{color-scheme:light;--paper:#f2f5f4;--ink:#142922;--muted:#4d625c;--line:#cedad5;--accent:#0b684f;--surface:#fff;font:15px/1.55 "Instrument Sans","Microsoft YaHei",system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink)}
+  .wrap{width:min(1220px,100% - 48px);margin:auto}
+  header{background:#15362c;color:#fff;padding:38px 0 34px}
+  header p{color:#d2e5dc;margin:9px 0 0}
+  h1,h2,h3,p{margin:0}
+  h1{font-size:2.25rem;line-height:1.2;letter-spacing:-.025em}
+  h2{font-size:1.25rem} h3{font-size:1rem}
+  main{display:grid;grid-template-columns:minmax(305px,365px) minmax(0,1fr);gap:28px;padding:28px 0 48px;align-items:start}
+  .inputs,.results{background:var(--surface);border:1px solid var(--line);border-radius:14px;min-width:0}
+  .block{padding:20px 22px}
+  .block+.block,fieldset+.block,fieldset+fieldset{border-top:1px solid var(--line)}
+  .muted,small{color:var(--muted)}
+  .hrow,.actions,.legend{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .hrow{justify-content:space-between}
+  .actions{margin-top:12px}
+  .source{margin-top:10px;overflow-wrap:anywhere}
+  .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 12px;margin-top:9px}
+  fieldset{border:0;margin:0;padding:17px 22px 20px;min-width:0}
+  fieldset legend{float:left;padding:0;font-weight:700;width:100%}
+  fieldset legend+.fields{clear:both;padding-top:8px;margin-top:0}
+  label{display:grid;gap:4px;font-size:.86rem;color:var(--muted)}
+  input,button,.file-button{font:inherit;border:1px solid var(--line);border-radius:7px;min-height:37px}
+  input{padding:6px 9px;color:var(--ink);background:#fff;width:100%;font-variant-numeric:tabular-nums}
+  button,.file-button{padding:6px 11px;background:#fff;color:var(--ink);cursor:pointer;font-weight:600;font-size:.86rem}
+  .file-button{position:relative;display:inline-flex;align-items:center;overflow:hidden}
+  .file-button input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .primary{background:var(--accent);color:#fff;border-color:var(--accent);width:100%;font-size:1rem}
+  button:hover,.file-button:hover{background:#e7f2ed}
+  .primary:hover{background:#085841}
+  button:disabled{opacity:.55;cursor:wait}
+  :focus-visible,.file-button:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+  ::selection{background:#c5e5d8;color:var(--ink)}
+  details{margin-top:13px}
+  summary{cursor:pointer;color:var(--accent);font-size:.87rem;font-weight:650}
+  details p,details label{margin-top:9px}
+  code{overflow-wrap:anywhere;font-size:.82em}
+  .error{color:#8e2722;font-size:.87rem;margin-top:8px;white-space:pre-line}
+  .note{font-size:.84rem;margin-top:8px}
+  .timestamp{margin-top:4px;font-size:.84rem}
+  .metrics{display:grid;grid-template-columns:1.2fr 1fr 1fr;margin:17px 0 0;border-block:1px solid var(--line)}
+  .metrics div{padding:13px 9px 14px 0;min-width:0}
+  .metrics div+div{padding-left:13px;border-left:1px solid var(--line)}
+  dt{color:var(--muted);font-size:.82rem}
+  dd{margin:2px 0 0;font-size:1.35rem;overflow-wrap:anywhere;font-weight:720;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .metrics div:first-child dd{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;white-space:nowrap;font-size:.87rem;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:8px 10px;border-bottom:1px solid #e4ebe7}
+  th:first-child,td:first-child{text-align:left;padding-left:0}
+  th:last-child,td:last-child{padding-right:0}
+  thead th{font-size:.8rem;color:var(--muted);font-weight:620}
+  tfoot th,tfoot td{font-weight:720}
+  .scroll{overflow:auto;margin-top:8px}
+  #costs tr:last-child{font-weight:720}
+  .schedule{max-height:320px}
+  .schedule thead{position:sticky;top:0;background:white}
+  .legend{font-size:.79rem;color:var(--muted);gap:8px 16px;margin:9px 0 3px}
+  .legend span::before{content:"";display:inline-block;width:13px;height:2px;background:var(--key);vertical-align:middle;margin-right:5px}
+  canvas{display:block;width:100%;height:234px}
+  [hidden]{display:none!important}
+  @media(max-width:800px){main{grid-template-columns:1fr;gap:16px}.wrap{width:calc(100% - 30px)}header{padding:26px 0}.block,fieldset{padding-inline:16px}h1{font-size:1.75rem}}
+  @media(max-width:420px){dd{font-size:1.05rem}.metrics div+div{padding-left:8px}canvas{height:190px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>储能需量收益测算</h1>
+  <p>比较申报需量和充放电计划，找出值得超需量的运行方案。</p>
+</div></header>
+<main class="wrap">
+  <form id="form" class="inputs">
+    <section class="block" aria-labelledby="input-title">
+      <h2 id="input-title">项目数据</h2>
+      <div class="actions">
+        <label class="file-button">导入 CSV<input id="file" type="file" accept=".csv,text/csv" aria-label="导入负荷和电价 CSV"></label>
+        <button id="sample" type="button">加载示例</button>
+        <button id="template" type="button">下载模板</button>
+      </div>
+      <p id="source" class="source note muted" aria-live="polite"></p>
+      <p id="source-error" class="error" role="alert" hidden></p>
+      <p id="custom-note" class="note muted" hidden>参数初始值来自示例。导入真实数据后，请按项目设备和合同核对下方各项。</p>
+      <details>
+        <summary>按项目名取数</summary>
+        <label>接口地址<input id="endpoint" type="text" placeholder="/api/load?project={project}" spellcheck="false"></label>
+        <label>项目名称<input id="project" type="text" placeholder="输入公司系统中的项目名称"></label>
+        <div class="actions"><button id="fetch" type="button">拉取项目数据</button></div>
+        <p class="note muted">接口用 <code>{project}</code> 接收项目名，并返回与模板同格式的 UTF‑8 CSV。跨站接口需允许本页面访问。</p>
+      </details>
+      <details>
+        <summary>CSV 格式与数据口径</summary>
+        <p class="note muted">每行一个等长计量时段，按时间升序，无缺段。字段为 <code>time,load_kw,price</code>，可附 <code>baseline_kw</code>。时间填 <code>YYYY-MM-DD HH:mm</code>，负荷填结算点未计入本储能调度的购电功率，电价填元/kWh。原计划充电填正、放电填负，空列按零处理。</p>
+        <p class="note muted">请提供下一结算期预测曲线与适用电价，或用代表性历史曲线试算。月中测算时导入剩余时段，并填本期已出现的最高需量。</p>
+      </details>
+    </section>
+    <fieldset>
+      <legend>储能参数</legend>
+      <div class="fields">
+        <label>可用容量（kWh）<input name="capacity" type="number" min="0.01" step="any" required></label>
+        <label>起止 SOC（%）<input name="soc" type="number" min="0" max="100" step="any" required></label>
+        <label>最大充电（kW）<input name="charge" type="number" min="0" step="any" required></label>
+        <label>最大放电（kW）<input name="discharge" type="number" min="0" step="any" required></label>
+        <label>往返效率（%）<input name="efficiency" type="number" min="1" max="100" step="any" required></label>
+        <label>损耗成本（元/放电 kWh）<input name="wear" type="number" min="0" step="any" required></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>需量与计费</legend>
+      <div class="fields">
+        <label>当前申报（kW）<input name="current" type="number" min="0" step="any" required></label>
+        <label>进线功率上限（kW）<input name="limit" type="number" min="0.01" step="any" required></label>
+        <label>申报下限（kW）<input name="minBid" type="number" min="0" step="any" required></label>
+        <label>申报上限（kW）<input name="maxBid" type="number" min="0" step="any" required></label>
+        <label>申报步长（kW）<input name="step" type="number" min="0.01" step="any" required></label>
+        <label>本期已计峰值（kW）<input name="pastPeak" type="number" min="0" step="any" required></label>
+        <label>需量单价（元/kW）<input name="demand" type="number" min="0" step="any" required></label>
+        <label>超额单价（元/kW）<input name="excess" type="number" min="0" step="any" required></label>
+        <label>超额起算（申报值的 %）<input name="threshold" type="number" min="0.01" step="any" required></label>
+      </div>
+      <p class="note muted">整期需量费 = 申报值 × 需量单价 + 超出起算值的部分 × 超额单价。申报已锁定时，把上下限都填为当前申报值。</p>
+    </fieldset>
+    <div class="block">
+      <button id="calculate" class="primary" type="submit">测算收益</button>
+      <p id="error" class="error" role="alert" hidden></p>
+    </div>
+  </form>
+  <section class="results" aria-labelledby="result-title">
+    <div class="block">
+      <div class="hrow"><h2 id="result-title">方案对比</h2><button type="button" id="export" hidden>导出调度 CSV</button></div>
+      <p id="status" class="timestamp muted" role="status"></p>
+      <div id="comparison" hidden>
+        <dl class="metrics">
+          <div><dt>相较原方案净收益</dt><dd id="gain"></dd></div>
+          <div><dt>建议申报</dt><dd id="bid"></dd></div>
+          <div><dt>预计整期峰值</dt><dd id="peak"></dd></div>
+        </dl>
+        <div class="scroll" tabindex="0" aria-label="方案费用对比">
+          <table>
+            <thead><tr><th scope="col">费用项目</th><th scope="col">原方案</th><th scope="col">建议方案</th></tr></thead>
+            <tbody id="costs"></tbody>
+          </table>
+        </div>
+        <p id="over" class="note muted"></p>
+      </div>
+    </div>
+    <div id="chart-section" class="block" hidden>
+      <h3>结算点功率</h3>
+      <div class="legend"><span style="--key:#667a72">原方案</span><span style="--key:#0b684f">建议方案</span><span style="--key:#8b4c1c">超额起算</span></div>
+      <canvas id="chart" role="img" aria-label="原方案与建议方案的结算点购电功率曲线，包含超额起算线"></canvas>
+    </div>
+    <div id="dispatch" class="block" hidden>
+      <h3>充放电安排</h3>
+      <div class="scroll schedule" tabindex="0" aria-label="充放电安排表">
+        <table><thead><tr><th scope="col">时段开始</th><th scope="col">操作</th><th scope="col">功率</th><th scope="col">时段末 SOC</th></tr></thead><tbody id="schedule"></tbody></table>
+      </div>
+      <p class="note muted">按同一条输入曲线比较，采用离散搜索。按单一结算点、禁止反送、期末恢复初始 SOC 测算。</p>
+    </div>
+  </section>
+</main>
+<script>
+'use strict';
+const EPS = 1e-7;
+const defaults = {
+  capacity: 360, soc: 25, charge: 180, discharge: 180, efficiency: 90, wear: 0.08,
+  current: 540, limit: 750, minBid: 250, maxBid: 750, step: 10,
+  pastPeak: 0, demand: 28, excess: 56, threshold: 105
+};
+const format = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+const money = value => '¥' + format.format(value);
+const stamp = time => new Date(time).toISOString().slice(0, 16).replace('T', ' ');
+
+function parseCsv(csv) {
+  const lines = csv.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+  const cells = line => line.split(',').map(cell => cell.trim().replace(/^"([^"]*)"$/, '$1'));
+  const columns = cells(lines.shift());
+  const required = ['time', 'load_kw', 'price'];
+  if (!required.every(key => columns.includes(key)) || new Set(columns).size !== columns.length) {
+    throw new Error('CSV 表头须包含 time、load_kw、price，且字段名称不能重复。');
+  }
+  const indices = [...required, 'baseline_kw'].map(key => columns.indexOf(key));
+  if (lines.length < 2 || lines.length > 10000) {
+    throw new Error('请导入一个结算期的曲线，至少 2 行，最多 10,000 行。');
+  }
+  const rows = lines.map((line, index) => {
+    const row = cells(line);
+    const [rawTime, rawLoad, rawPrice, rawBaseline] = indices.map(column => row[column]);
+    const timestamp = rawTime?.replace('T', ' ');
+    const time = Date.parse(timestamp?.replace(' ', 'T') + ':00Z');
+    const load = Number(rawLoad);
+    const price = Number(rawPrice);
+    const baseline = Number(rawBaseline || 0);
+    if (row.length !== columns.length || !/^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(timestamp) ||
+        !Number.isFinite(time) || stamp(time) !== timestamp || !rawLoad || !rawPrice ||
+        ![load, price, baseline].every(Number.isFinite) || load < 0) {
+      throw new Error('CSV 第 ' + (index + 2) + ' 行有无效的时间、负荷、电价或充放电功率。');
+    }
+    return { time, load, price, baseline };
+  });
+  const interval = rows[1].time - rows[0].time;
+  if (interval <= 0 || rows.some((row, i) => i && row.time - rows[i - 1].time !== interval)) {
+    throw new Error('时间须严格升序且间隔相同。请检查缺段与重复时间。');
+  }
+  return { rows, hours: interval / 3600000 };
+}
+
+function demandFees(bid, peak, p) {
+  return {
+    baseFee: bid * p.demand,
+    excessFee: Math.max(0, peak - bid * p.factor) * p.excess
+  };
+}
+
+function bestBid(peak, p) {
+  // Between the bounds and the point where excess fees start, cost is piecewise linear.
+  const last = Math.floor((p.maxBid - p.minBid) / p.step + EPS);
+  const corner = (peak / p.factor - p.minBid) / p.step;
+  const candidates = [0, last, Math.floor(corner), Math.ceil(corner)]
+    .map(index => p.minBid + Math.max(0, Math.min(last, index)) * p.step);
+  return candidates.reduce((best, bid) => {
+    const fees = demandFees(bid, peak, p);
+    const cost = fees.baseFee + fees.excessFee;
+    return !best || cost < best.cost - EPS ||
+      (Math.abs(cost - best.cost) <= EPS && Math.abs(bid - p.current) < Math.abs(best.bid - p.current))
+      ? { bid, cost } : best;
+  }, null).bid;
+}
+
+function evaluate(data, powers, bid, p, checkBaseline = false) {
+  const { rows, hours } = data;
+  let energy = p.startEnergy;
+  let peak = p.pastPeak;
+  let energyFee = 0;
+  let wearFee = 0;
+  const schedule = rows.map((row, i) => {
+    const power = powers[i];
+    const grid = row.load + power;
+    energy += power * hours * (power >= 0 ? p.eff : 1 / p.eff);
+    if (checkBaseline && (grid < -EPS || grid > p.limit + EPS || power > p.charge + EPS ||
+        power < -p.discharge - EPS || energy < -EPS || energy > p.capacity + EPS)) {
+      throw new Error(stamp(row.time) + ' 的原方案超出进线、充放电功率或 SOC 范围。请核对数据与参数。');
+    }
+    peak = Math.max(peak, grid);
+    energyFee += grid * row.price * hours;
+    wearFee += Math.max(0, -power) * hours * p.wear;
+    return { power, grid, soc: Math.max(0, Math.min(100, energy / p.capacity * 100)) };
+  });
+  if (checkBaseline && Math.abs(energy - p.startEnergy) > Math.max(EPS, p.capacity * 0.0001)) {
+    throw new Error('原方案结束时的 SOC 须回到初始值，请检查原计划曲线或电池参数。');
+  }
+  const { baseFee, excessFee } = demandFees(bid, peak, p);
+  return { bid, peak, schedule, energyFee, wearFee, baseFee, excessFee,
+    total: energyFee + wearFee + baseFee + excessFee };
+}
+
+function dispatchUnderCap(data, p, cap, levels, start, transitions) {
+  const { rows } = data;
+  const count = levels.length;
+  let previous = new Float64Array(count).fill(Infinity);
+  let next = new Float64Array(count);
+  const parents = new Int16Array(rows.length * count).fill(-1);
+  previous[start] = 0;
+  for (let t = 0; t < rows.length; t++) {
+    const { load, price } = rows[t];
+    next.fill(Infinity);
+    for (let from = 0; from < count; from++) {
+      if (!Number.isFinite(previous[from])) continue;
+      for (const { to, power, energy, wear } of transitions[from]) {
+        const grid = load + power;
+        if (grid < -EPS || grid > cap + EPS) continue;
+        const cost = previous[from] + energy * price + wear;
+        if (cost < next[to] - EPS) {
+          next[to] = cost;
+          parents[t * count + to] = from;
+        }
+      }
+    }
+    [previous, next] = [next, previous];
+  }
+  if (!Number.isFinite(previous[start])) return null;
+  const powers = new Float64Array(rows.length);
+  let to = start;
+  for (let t = rows.length - 1; t >= 0; t--) {
+    const from = parents[t * count + to];
+    const change = levels[to] - levels[from];
+    powers[t] = change / data.hours * (change >= 0 ? 1 / p.eff : p.eff);
+    to = from;
+  }
+  return powers;
+}
+
+function optimize(data, params) {
+  const p = { ...params, factor: params.threshold / 100, eff: Math.sqrt(params.efficiency / 100),
+    startEnergy: params.capacity * params.soc / 100 };
+  if (p.minBid > p.maxBid) throw new Error('申报下限不能大于申报上限。');
+  const basePowers = data.rows.map(row => row.baseline);
+  const baseline = evaluate(data, basePowers, p.current, p, true);
+  const levels = Array.from({ length: 41 }, (_, i) => p.capacity * i / 40);
+  if (!levels.some(level => Math.abs(level - p.startEnergy) <= EPS)) {
+    levels.push(p.startEnergy);
+    levels.sort((a, b) => a - b);
+  }
+  const start = levels.findIndex(level => Math.abs(level - p.startEnergy) <= EPS);
+  const transitions = levels.map(from => levels.flatMap((to, index) => {
+    const change = to - from;
+    const power = change / data.hours * (change >= 0 ? 1 / p.eff : p.eff);
+    if (power > p.charge + EPS || power < -p.discharge - EPS) return [];
+    return [{ to: index, power, energy: power * data.hours,
+      wear: Math.max(0, -power) * data.hours * p.wear }];
+  }));
+  const maxLoad = data.rows.reduce((peak, row) => Math.max(peak, row.load), 0);
+  const low = Math.min(p.limit, Math.max(0, maxLoad - p.discharge));
+  const high = Math.min(p.limit, maxLoad + p.charge);
+  const caps = Array.from({ length: 25 }, (_, i) => low + (high - low) * i / 24);
+  caps.push(p.pastPeak, baseline.peak, maxLoad, p.current * p.factor, p.minBid * p.factor, p.maxBid * p.factor);
+  const uniqueCaps = [...new Set(caps.map(cap => Math.max(low, Math.min(high, cap))))];
+
+  let best = evaluate(data, basePowers, bestBid(baseline.peak, p), p);
+  for (const cap of uniqueCaps) {
+    const powers = dispatchUnderCap(data, p, cap, levels, start, transitions);
+    if (!powers) continue;
+    const peak = powers.reduce((value, power, i) => Math.max(value, power + data.rows[i].load), p.pastPeak);
+    const candidate = evaluate(data, powers, bestBid(peak, p), p);
+    if (candidate.total < best.total - EPS) best = candidate;
+  }
+  const gridResolution = p.capacity / 40;
+  const coarse = (p.charge > 0 && p.charge * data.hours * p.eff < gridResolution - EPS) ||
+    (p.discharge > 0 && p.discharge * data.hours / p.eff < gridResolution - EPS);
+  return { baseline, best, factor: p.factor, coarse };
+}
+
+function sampleCsv() {
+  const start = Date.UTC(2026, 10, 1);
+  const header = 'time,load_kw,price,baseline_kw';
+  const rows = Array.from({ length: 96 * 3 }, (_, i) => {
+    const hour = (i % 96) / 4;
+    const daytime = hour >= 8 && hour < 21;
+    const peak = hour >= 17 && hour < 20;
+    const load = (daytime ? 438 : 260) + Math.round(24 * Math.sin(i / 7)) + (peak ? 82 : 0);
+    const price = peak ? 1.24 : daytime ? 0.68 : 0.29;
+    return [stamp(start + i * 900000), load, price, 0].join(',');
+  });
+  return [header, ...rows].join('\n') + '\n';
+}
+
+const $ = id => document.getElementById(id);
+let inputData;
+let sourceName = '';
+let displayed;
+let sourceRequest = 0;
+
+function showError(error, target = 'error') {
+  $(target).textContent = error.message;
+  $(target).hidden = false;
+}
+
+function clearError() {
+  $('error').hidden = true;
+}
+
+function resetResult() {
+  displayed = null;
+  for (const id of ['comparison', 'chart-section', 'dispatch', 'export']) $(id).hidden = true;
+  $('status').textContent = '数据或参数已更新，请重新测算。';
+}
+
+function setSource(csv, name, example = false) {
+  inputData = parseCsv(csv);
+  sourceName = name;
+  const { rows, hours } = inputData;
+  $('source').textContent = name + ' · ' + rows.length + ' 个时段 · ' + format.format(hours * 60) + ' 分钟';
+  $('source-error').hidden = true;
+  $('custom-note').hidden = example;
+  clearError();
+  resetResult();
+}
+
+function saveCsv(name, csv) {
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function addRow(target, values) {
+  const tr = target.insertRow();
+  for (const value of values) tr.insertCell().textContent = value;
+}
+
+function drawChart() {
+  if (!displayed) return;
+  const { baseline, best, factor } = displayed;
+  const canvas = $('chart');
+  const { width, height } = canvas.getBoundingClientRect();
+  if (!width || !height) return;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.font = '11px system-ui, sans-serif';
+  const left = 47;
+  const right = width - 12;
+  const top = 16;
+  const bottom = height - 26;
+  const trigger = best.bid * factor;
+  const maximum = Math.max(1, baseline.peak, best.peak, trigger) * 1.08;
+  const x = i => left + (right - left) * i / inputData.rows.length;
+  const y = kw => bottom - (bottom - top) * kw / maximum;
+  for (let i = 0; i <= 4; i++) {
+    const value = maximum * i / 4;
+    ctx.strokeStyle = '#dce6e1';
+    ctx.fillStyle = '#4d625c';
+    ctx.beginPath();
+    ctx.moveTo(left, y(value));
+    ctx.lineTo(right, y(value));
+    ctx.stroke();
+    ctx.fillText(format.format(value), 2, y(value) + 4);
+  }
+  ctx.fillText('kW', 2, 10);
+  const rows = inputData.rows;
+  for (const fraction of (width > 460 ? [0, 0.5, 1] : [0, 1])) {
+    const index = Math.min(rows.length - 1, Math.round(fraction * rows.length));
+    const label = stamp(rows[index].time).slice(5);
+    ctx.textAlign = fraction === 0 ? 'left' : fraction === 1 ? 'right' : 'center';
+    ctx.fillText(label, x(fraction * rows.length), height - 6);
+  }
+  ctx.save();
+  ctx.strokeStyle = '#8b4c1c';
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(left, y(trigger));
+  ctx.lineTo(right, y(trigger));
+  ctx.stroke();
+  ctx.restore();
+  for (const [series, color] of [[baseline.schedule, '#667a72'], [best.schedule, '#0b684f']]) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(left, y(series[0].grid));
+    series.forEach((point, index) => {
+      ctx.lineTo(x(index), y(point.grid));
+      ctx.lineTo(x(index + 1), y(point.grid));
+    });
+    ctx.stroke();
+  }
+}
+
+function render(result) {
+  displayed = result;
+  const { baseline, best, factor, coarse } = result;
+  const { rows, hours } = inputData;
+  $('status').textContent = sourceName + ' · ' + stamp(rows[0].time) + ' 至 ' +
+    stamp(rows.at(-1).time + hours * 3600000) + '（结束）';
+  const gain = baseline.total - best.total;
+  $('gain').textContent = gain < -EPS ? '−' + money(-gain) : money(Math.max(0, gain));
+  $('bid').textContent = format.format(best.bid) + ' kW';
+  $('peak').textContent = format.format(best.peak) + ' kW';
+  const compare = $('costs');
+  compare.replaceChildren();
+  for (const [title, key] of [['购电费', 'energyFee'], ['电池损耗成本', 'wearFee'],
+    ['申报需量费', 'baseFee'], ['超额需量费', 'excessFee'], ['合计', 'total']]) {
+    addRow(compare, [title, money(baseline[key]), money(best[key])]);
+  }
+  const trigger = best.bid * factor;
+  const over = Math.max(0, best.peak - trigger);
+  $('over').textContent = '超额起算 ' + format.format(trigger) + ' kW · 超额 ' +
+    format.format(over) + ' kW。' + (coarse ? ' 当前时段较短或调度功率较小，SOC 搜索粒度可能漏掉可行调度。' : '');
+  const schedule = $('schedule');
+  schedule.replaceChildren();
+  best.schedule.forEach(({ power, soc }, index) => {
+    if (Math.abs(power) <= EPS) return;
+    addRow(schedule, [stamp(rows[index].time), power > 0 ? '充电' : '放电',
+      format.format(Math.abs(power)) + ' kW', format.format(soc) + '%']);
+  });
+  if (!schedule.rows.length) addRow(schedule, ['本期无充放电', '—', '—', '—']);
+  for (const id of ['comparison', 'chart-section', 'dispatch', 'export']) $(id).hidden = false;
+  drawChart();
+}
+
+function loadSample() {
+  sourceRequest++;
+  for (const [key, value] of Object.entries(defaults)) $('form').elements.namedItem(key).value = value;
+  setSource(sampleCsv(), '示例数据（3 天模拟结算期，费率仅供演示）', true);
+}
+
+$('sample').addEventListener('click', loadSample);
+$('template').addEventListener('click', () => saveCsv('储能测算模板.csv', sampleCsv()));
+$('file').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const request = ++sourceRequest;
+  $('source-error').hidden = true;
+  event.target.value = '';
+  try {
+    const csv = await file.text();
+    if (request === sourceRequest) setSource(csv, file.name);
+  } catch (error) {
+    if (request === sourceRequest) showError(error, 'source-error');
+  }
+});
+$('fetch').addEventListener('click', async () => {
+  $('source-error').hidden = true;
+  const request = ++sourceRequest;
+  const endpoint = $('endpoint').value.trim();
+  const project = $('project').value.trim();
+  try {
+    if (!endpoint.includes('{project}') || !project) {
+      throw new Error('请填写项目名称，以及含有 {project} 的接口地址。');
+    }
+    const url = new URL(endpoint.replaceAll('{project}', encodeURIComponent(project)), location.href);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('接口需使用 HTTP 或 HTTPS。');
+    $('fetch').disabled = true;
+    $('fetch').textContent = '正在拉取';
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('接口返回 HTTP ' + response.status + '，请检查项目名与接口配置。');
+    const csv = await response.text();
+    if (request === sourceRequest) setSource(csv, project);
+  } catch (error) {
+    if (request === sourceRequest) {
+      showError(error.name === 'TypeError' || error.name === 'TimeoutError'
+        ? new Error('无法连接项目接口，请检查地址、网络和跨站访问权限。') : error, 'source-error');
+    }
+  } finally {
+    $('fetch').disabled = false;
+    $('fetch').textContent = '拉取项目数据';
+  }
+});
+$('form').addEventListener('input', event => {
+  if (event.target.type === 'number') {
+    clearError();
+    resetResult();
+  }
+});
+$('form').addEventListener('submit', event => {
+  event.preventDefault();
+  clearError();
+  resetResult();
+  $('calculate').disabled = true;
+  $('status').textContent = '正在比较候选方案…';
+  setTimeout(() => {
+    try {
+      const params = Object.fromEntries([...new FormData($('form'))].map(([key, value]) => [key, Number(value)]));
+      render(optimize(inputData, params));
+    } catch (error) {
+      showError(error);
+      $('status').textContent = '请修正输入后重新测算。';
+    } finally {
+      $('calculate').disabled = false;
+    }
+  }, 30);
+});
+$('export').addEventListener('click', () => {
+  if (!displayed) return;
+  const precision = value => Number(value.toFixed(6));
+  const lines = ['time,load_kw,price,baseline_kw,recommended_kw,recommended_grid_kw,end_soc_percent,contract_kw'];
+  inputData.rows.forEach((row, index) => {
+    const { power, grid, soc } = displayed.best.schedule[index];
+    lines.push([stamp(row.time), row.load, row.price, row.baseline, precision(power), precision(grid),
+      precision(soc), precision(displayed.best.bid)].join(','));
+  });
+  saveCsv('储能调度建议.csv', lines.join('\n') + '\n');
+});
+new ResizeObserver(drawChart).observe($('chart'));
+loadSample();
+$('form').requestSubmit();
+</script>
+</body>
+</html>
